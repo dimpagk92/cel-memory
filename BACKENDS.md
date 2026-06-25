@@ -41,7 +41,7 @@ delegate to an inner provider. See [`examples/custom_provider.rs`](examples/cust
 
 | Layer | Crate | Owns |
 |-------|-------|------|
-| Contract | `cel-memory` | `MemoryProvider`, chunks, queries, sessions, errors, `Summarizer`, `MemoryWriteHook` |
+| Contract | `cel-memory` | `MemoryProvider`, chunks, queries, sessions, errors, `Embedder`, `Summarizer`, `MemoryWriteHook` |
 | Reference impl | `cel-memory` (`BasicMemoryProvider`) | In-memory behavior for tests and docs |
 | Production local backend | [`cel-memory-sqlite`](https://github.com/dimpagk92/cel-memory-sqlite) | SQLite schema, migrations, hybrid retrieval, embedder seam |
 | Your backend | **new crate** (e.g. `cel-memory-postgres`) | Your DB client, schema, indexes, retrieval strategy |
@@ -63,7 +63,7 @@ cel-memory-postgres/          # name is up to you; prefix helps discoverability
 ├── src/
 │   ├── lib.rs
 │   ├── error.rs              # map storage errors → MemoryError
-│   ├── embedder.rs           # optional: re-export or wrap cel-memory-sqlite's Embedder
+│   ├── embedder.rs           # optional: wrap or extend cel_memory::Embedder
 │   ├── schema.rs             # table definitions (conceptual map from sqlite)
 │   └── provider.rs           # PostgresMemoryProvider + MemoryProvider impl
 └── tests/
@@ -199,15 +199,21 @@ Before every persist, consult optional `MemoryWriteHook`:
 
 ### Embedder
 
-Today the [`Embedder`] trait lives in `cel-memory-sqlite`. Backends typically:
+The [`Embedder`] trait lives in `cel-memory` (since **0.2.0**). Backends take
+`Arc<dyn Embedder>` at construction and use [`MockEmbedder`] in tests.
+Production embedders (e.g. `FastEmbedEmbedder` in `cel-memory-sqlite`) can live
+in backend crates.
 
-- Depend on `cel-memory-sqlite` only for `MockEmbedder` in dev-tests, **or**
-- Copy the small trait into your crate, **or**
-- Wait for a future extraction into `cel-memory` (not required to start).
-
-[`Embedder`]: https://docs.rs/cel-memory-sqlite/latest/cel_memory_sqlite/trait.Embedder.html
+[`Embedder`]: https://docs.rs/cel-memory/latest/cel_memory/trait.Embedder.html
+[`MockEmbedder`]: https://docs.rs/cel-memory/latest/cel_memory/struct.MockEmbedder.html
 
 Embed at write time; store model name + dimension on the chunk row.
+
+Backend integration tests should call [`assert_write_get_stats`] from
+`cel_memory::conformance` (re-exported at the crate root) so every persistence
+layer honors the same write/get/stats contract.
+
+[`assert_write_get_stats`]: https://docs.rs/cel-memory/latest/cel_memory/fn.assert_write_get_stats.html
 
 ### Errors
 

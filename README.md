@@ -20,7 +20,7 @@ how chunks are stored, embedded, indexed, summarized, and aged. Attach a
 [`Summarizer`](https://docs.rs/cel-memory/latest/cel_memory/trait.Summarizer.html)
 with [`BasicMemoryProvider::with_summarizer`] to enable session summaries and rollups.
 
-**Status:** v0.1.8 on [crates.io](https://crates.io/crates/cel-memory) — the `MemoryProvider` trait surface is stable. Two implementations ship against it: `BasicMemoryProvider` (in-crate, in-memory reference) and [`cel-memory-sqlite`](https://crates.io/crates/cel-memory-sqlite) (SQLite + vector + FTS, hybrid retrieval).
+**Status:** v0.2.0 on [crates.io](https://crates.io/crates/cel-memory) — the `MemoryProvider` trait surface is stable. Two implementations ship against it: `BasicMemoryProvider` (in-crate, in-memory reference) and [`cel-memory-sqlite`](https://crates.io/crates/cel-memory-sqlite) (SQLite + vector + FTS, hybrid retrieval). LLM summarizers live in [`cel-summarizer`](https://crates.io/crates/cel-summarizer).
 
 ## What's Included
 
@@ -33,7 +33,7 @@ with [`BasicMemoryProvider::with_summarizer`] to enable session summaries and ro
 ## Out Of Scope
 
 - Storage. See [`cel-memory-sqlite`](https://crates.io/crates/cel-memory-sqlite) for SQLite + vector retrieval.
-- Embedding models. The trait makes no assumption about whether/how content is embedded — that's a backend concern.
+- Embedding runtimes. The [`Embedder`] trait is defined here; ONNX/fastembed backends ship in companion crates.
 - LLM-call retrieval logic. See `cel-brief` for "retrieve memory + assemble into an LLM prompt."
 
 ## Example

@@ -1,7 +1,8 @@
 [package]
 name = "cel-memory"
-version = "0.1.9"
+version = "0.2.0"
 edition = "2021"
+rust-version = "1.76"
 license = "Apache-2.0"
 authors = ["Dimitrios Pagkratis <dimitris@timberhub.com>"]
 homepage = "https://github.com/dimpagk92/cel-memory"

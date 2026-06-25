@@ -10,6 +10,23 @@ line at `0.1.5`.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-06-25
+
+### Added
+- [`Embedder`] trait, [`EmbedderError`], and [`MockEmbedder`] — extracted from
+  `cel-memory-sqlite` so backends depend on the contract crate only.
+- [`assert_write_get_stats`] conformance helper for backend integration tests.
+
+### Changed
+- **Breaking:** removed the deprecated `ChunkSource::Cortex` alias; use
+  `ChunkSource::Perception`.
+- MSRV raised to **1.76** (`rust-version` in `Cargo.toml`).
+
+[`Embedder`]: https://docs.rs/cel-memory/latest/cel_memory/trait.Embedder.html
+[`EmbedderError`]: https://docs.rs/cel-memory/latest/cel_memory/enum.EmbedderError.html
+[`MockEmbedder`]: https://docs.rs/cel-memory/latest/cel_memory/struct.MockEmbedder.html
+[`assert_write_get_stats`]: https://docs.rs/cel-memory/latest/cel_memory/fn.assert_write_get_stats.html
+
 ## [0.1.9] — 2026-06-25
 
 ### Added

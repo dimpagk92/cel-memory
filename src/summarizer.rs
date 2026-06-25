@@ -10,10 +10,8 @@
 //! `MemoryChunk` and linking its constituents in
 //! `memory_summary_members`; the summarizer itself only generates text.
 //!
-//! Two production implementations live in the `cel-summarizer` crate:
-//! `AnthropicSummarizer` (default cloud path, Claude Haiku 4.5) and
-//! `OllamaSummarizer` (local fallback, pinned to
-//! `llama3.2:3b-instruct-q4_K_M`).
+//! Production implementations live in the [`cel-summarizer`](https://crates.io/crates/cel-summarizer)
+//! crate: `AnthropicSummarizer` (cloud) and `OllamaSummarizer` (local).
 //!
 //! Object-safe: stored as `Arc<dyn Summarizer>` everywhere.
 //!
