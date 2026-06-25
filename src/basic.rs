@@ -1,8 +1,8 @@
 //! `BasicMemoryProvider` — the v1 backing implementation.
 //!
 //! In-process, in-memory, deliberately simple. Implements retrieval, writes,
-//! session lifecycle, simple deletes, export, and stats; returns
-//! `Err(NotImplemented)` for summarization and re-embed; no-ops for
+//! session lifecycle, simple deletes, export, stats, summarization, rollups,
+//! and re-embed metadata updates when a [`Summarizer`] is attached; no-ops for
 //! `update_importance` and `supersede`.
 //!
 //! Lexical retrieval only — substring + recency. A full storage backend
@@ -21,7 +21,7 @@ use chrono::{NaiveDate, Utc};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::chunk::{ChunkKind, MemoryChunk, MemoryTier, NewMemoryChunk};
+use crate::chunk::{ChunkKind, ChunkSource, MemoryChunk, MemoryTier, NewMemoryChunk};
 use crate::error::{MemoryError, Result};
 use crate::ops::{
     AccessEntry, AgingReport, EvictionEntry, EvictionReason, ExportBundle, ExportFilter,
@@ -30,15 +30,28 @@ use crate::ops::{
 use crate::provider::MemoryProvider;
 use crate::query::{MemoryPredicate, MemoryQuery};
 use crate::session::{MemorySession, NewMemorySession, SessionFilter, SessionOutcome};
+use crate::{Summarizer, SummarizerError, SummaryContext};
 
 /// The v1 backing implementation. Cheap to construct; `Clone` is shallow
 /// (shares the underlying state). Safe to share across tasks.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct BasicMemoryProvider {
     state: Arc<Mutex<State>>,
     /// Optional pre-write hook (redaction, governance). When unset, every
     /// write proceeds verbatim.
     write_hook: Option<Arc<dyn crate::MemoryWriteHook>>,
+    /// Optional summarizer for session summaries and rollups.
+    summarizer: Option<Arc<dyn Summarizer>>,
+}
+
+impl Default for BasicMemoryProvider {
+    fn default() -> Self {
+        Self {
+            state: Arc::new(Mutex::new(State::default())),
+            write_hook: None,
+            summarizer: None,
+        }
+    }
 }
 
 impl std::fmt::Debug for BasicMemoryProvider {
@@ -46,6 +59,10 @@ impl std::fmt::Debug for BasicMemoryProvider {
         f.debug_struct("BasicMemoryProvider")
             .field("state", &self.state)
             .field("write_hook", &self.write_hook.as_ref().map(|_| "<hook>"))
+            .field(
+                "summarizer",
+                &self.summarizer.as_ref().map(|_| "<summarizer>"),
+            )
             .finish()
     }
 }
@@ -56,6 +73,8 @@ struct State {
     sessions: HashMap<String, MemorySession>,
     evictions: Vec<EvictionEntry>,
     accesses: Vec<AccessEntry>,
+    /// rollup/summary id → member chunk ids (idempotent linking).
+    summary_members: HashMap<String, Vec<String>>,
 }
 
 impl BasicMemoryProvider {
@@ -72,8 +91,227 @@ impl BasicMemoryProvider {
         self
     }
 
+    /// Attach a [`Summarizer`] used by [`MemoryProvider::summarize_session`],
+    /// [`MemoryProvider::rollup_day`], and [`MemoryProvider::rollup_rule_week`].
+    pub fn with_summarizer(mut self, summarizer: Arc<dyn Summarizer>) -> Self {
+        self.summarizer = Some(summarizer);
+        self
+    }
+
     fn next_id() -> String {
         Uuid::now_v7().to_string()
+    }
+
+    fn metadata_str(chunk: &MemoryChunk, key: &str) -> Option<String> {
+        chunk
+            .metadata
+            .get(key)
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+    }
+
+    async fn fetch_session_chunks(&self, session_id: &str) -> Result<Vec<MemoryChunk>> {
+        let state = self.state.lock().await;
+        let mut out: Vec<MemoryChunk> = state
+            .chunks
+            .values()
+            .filter(|c| {
+                c.session_id.as_deref() == Some(session_id) && c.kind != ChunkKind::JobSummary
+            })
+            .cloned()
+            .collect();
+        out.sort_by_key(|c| c.created_at);
+        Ok(out)
+    }
+
+    async fn fetch_day_chunks(&self, date: NaiveDate) -> Result<Vec<MemoryChunk>> {
+        let state = self.state.lock().await;
+        let mut out: Vec<MemoryChunk> = state
+            .chunks
+            .values()
+            .filter(|c| c.created_at.date_naive() == date && c.kind != ChunkKind::Rollup)
+            .cloned()
+            .collect();
+        out.sort_by_key(|c| c.created_at);
+        Ok(out)
+    }
+
+    async fn fetch_rule_week_chunks(
+        &self,
+        rule_id: &str,
+        week_start: NaiveDate,
+    ) -> Result<Vec<MemoryChunk>> {
+        let week_end = week_start
+            .checked_add_days(chrono::Days::new(7))
+            .ok_or_else(|| MemoryError::InvalidArgument(format!("week overflow: {week_start}")))?;
+        let state = self.state.lock().await;
+        let mut out: Vec<MemoryChunk> = state
+            .chunks
+            .values()
+            .filter(|c| {
+                c.kind == ChunkKind::Fire
+                    && c.created_at.date_naive() >= week_start
+                    && c.created_at.date_naive() < week_end
+                    && Self::metadata_str(c, "rule_id").as_deref() == Some(rule_id)
+            })
+            .cloned()
+            .collect();
+        out.sort_by_key(|c| c.created_at);
+        Ok(out)
+    }
+
+    async fn day_rollup_exists(&self, date: NaiveDate) -> Result<bool> {
+        let date_s = date.to_string();
+        let state = self.state.lock().await;
+        Ok(state.chunks.values().any(|c| {
+            c.kind == ChunkKind::Rollup && Self::metadata_str(c, "rollup_date") == Some(date_s.clone())
+        }))
+    }
+
+    async fn rule_week_rollup_exists(&self, rule_id: &str, week_start: NaiveDate) -> Result<bool> {
+        let week_s = week_start.to_string();
+        let state = self.state.lock().await;
+        Ok(state.chunks.values().any(|c| {
+            c.kind == ChunkKind::Rollup
+                && Self::metadata_str(c, "rollup_rule_id").as_deref() == Some(rule_id)
+                && Self::metadata_str(c, "rollup_week_start") == Some(week_s.clone())
+        }))
+    }
+
+    async fn link_summary_members(&self, rollup_id: &str, member_ids: &[String]) -> Result<()> {
+        let mut state = self.state.lock().await;
+        let entry = state
+            .summary_members
+            .entry(rollup_id.to_string())
+            .or_default();
+        for mid in member_ids {
+            if !entry.contains(mid) {
+                entry.push(mid.clone());
+            }
+        }
+        Ok(())
+    }
+
+    fn map_summarizer_error(summarizer: &dyn Summarizer, err: SummarizerError) -> MemoryError {
+        match err {
+            SummarizerError::NoInput => {
+                MemoryError::InvalidArgument("summarizer received no input".into())
+            }
+            other => {
+                MemoryError::Provider(format!("summarizer {} failed: {other}", summarizer.name()))
+            }
+        }
+    }
+
+    async fn rollup_day_inner(&self, date: NaiveDate, force: bool) -> Result<Vec<MemoryChunk>> {
+        let summarizer = self.summarizer.clone().ok_or(MemoryError::NotImplemented(
+            "BasicMemoryProvider::rollup_day — no summarizer attached (call `with_summarizer` first)",
+        ))?;
+
+        if !force && self.day_rollup_exists(date).await? {
+            return Ok(Vec::new());
+        }
+
+        let members = self.fetch_day_chunks(date).await?;
+        if members.is_empty() {
+            return Ok(Vec::new());
+        }
+        let member_ids: Vec<String> = members.iter().map(|c| c.id.clone()).collect();
+        let ctx = SummaryContext {
+            kind_label: Some(format!("day {date}")),
+            note: Some(format!(
+                "Daily rollup for {date} ({} chunks)",
+                members.len()
+            )),
+            max_words: None,
+        };
+        let summary_text = summarizer
+            .summarize(&members, &ctx)
+            .await
+            .map_err(|e| Self::map_summarizer_error(summarizer.as_ref(), e))?;
+
+        let written = self
+            .write(NewMemoryChunk {
+                kind: ChunkKind::Rollup,
+                source: ChunkSource::System,
+                session_id: None,
+                project_root: None,
+                caller_id: "system".into(),
+                content: summary_text,
+                metadata: serde_json::json!({
+                    "rollup_kind": "day",
+                    "rollup_date": date.to_string(),
+                    "member_count": member_ids.len(),
+                    "summarizer": summarizer.name(),
+                }),
+                importance: None,
+                shareable: false,
+                pinned: false,
+            })
+            .await?;
+        self.link_summary_members(&written.id, &member_ids).await?;
+        Ok(vec![written])
+    }
+
+    async fn rollup_rule_week_inner(
+        &self,
+        rule_id: &str,
+        week_start: NaiveDate,
+        force: bool,
+    ) -> Result<MemoryChunk> {
+        let summarizer = self.summarizer.clone().ok_or(MemoryError::NotImplemented(
+            "BasicMemoryProvider::rollup_rule_week — no summarizer attached \
+             (call `with_summarizer` first)",
+        ))?;
+
+        if !force && self.rule_week_rollup_exists(rule_id, week_start).await? {
+            return Err(MemoryError::InvalidArgument(format!(
+                "rollup already exists for rule {rule_id} week {week_start}"
+            )));
+        }
+
+        let members = self.fetch_rule_week_chunks(rule_id, week_start).await?;
+        if members.is_empty() {
+            return Err(MemoryError::NotFound(format!(
+                "no fires for rule {rule_id} in week of {week_start}"
+            )));
+        }
+        let member_ids: Vec<String> = members.iter().map(|c| c.id.clone()).collect();
+        let ctx = SummaryContext {
+            kind_label: Some(format!("week of {week_start} for rule {rule_id}")),
+            note: Some(format!(
+                "Weekly rollup for rule {rule_id} ({} fires)",
+                members.len()
+            )),
+            max_words: None,
+        };
+        let summary_text = summarizer
+            .summarize(&members, &ctx)
+            .await
+            .map_err(|e| Self::map_summarizer_error(summarizer.as_ref(), e))?;
+
+        let written = self
+            .write(NewMemoryChunk {
+                kind: ChunkKind::Rollup,
+                source: ChunkSource::System,
+                session_id: None,
+                project_root: None,
+                caller_id: "system".into(),
+                content: summary_text,
+                metadata: serde_json::json!({
+                    "rollup_kind": "rule_week",
+                    "rollup_rule_id": rule_id,
+                    "rollup_week_start": week_start.to_string(),
+                    "member_count": member_ids.len(),
+                    "summarizer": summarizer.name(),
+                }),
+                importance: None,
+                shareable: false,
+                pinned: false,
+            })
+            .await?;
+        self.link_summary_members(&written.id, &member_ids).await?;
+        Ok(written)
     }
 }
 
@@ -427,25 +665,89 @@ impl MemoryProvider for BasicMemoryProvider {
         state.sessions.clear();
         state.accesses.clear();
         state.evictions.clear();
+        state.summary_members.clear();
         Ok(report)
     }
 
-    // ─────────────── Summarization (NotImplemented in v1) ───────────────
+    // ─────────────── Summarization ───────────────
 
-    async fn summarize_session(&self, _session_id: &str) -> Result<MemoryChunk> {
-        Err(MemoryError::NotImplemented("summarize_session"))
+    async fn summarize_session(&self, session_id: &str) -> Result<MemoryChunk> {
+        let summarizer = self.summarizer.clone().ok_or(MemoryError::NotImplemented(
+            "BasicMemoryProvider::summarize_session — no summarizer attached \
+             (call `with_summarizer` first)",
+        ))?;
+
+        let session = self
+            .get_session(session_id)
+            .await?
+            .ok_or_else(|| MemoryError::NotFound(format!("session {session_id}")))?;
+
+        let members = self.fetch_session_chunks(session_id).await?;
+        if members.is_empty() {
+            return Err(MemoryError::InvalidArgument(format!(
+                "session {session_id} has no chunks to summarize"
+            )));
+        }
+        let member_ids: Vec<String> = members.iter().map(|c| c.id.clone()).collect();
+        let ctx = SummaryContext {
+            kind_label: Some("session".into()),
+            note: session
+                .title
+                .as_ref()
+                .map(|t| format!("session title: {t}")),
+            max_words: None,
+        };
+        let summary_text = summarizer
+            .summarize(&members, &ctx)
+            .await
+            .map_err(|e| Self::map_summarizer_error(summarizer.as_ref(), e))?;
+
+        let written = self
+            .write(NewMemoryChunk {
+                kind: ChunkKind::JobSummary,
+                source: ChunkSource::Embedded,
+                session_id: Some(session_id.to_string()),
+                project_root: members.iter().find_map(|c| c.project_root.clone()),
+                caller_id: session.caller_id.clone(),
+                content: summary_text.clone(),
+                metadata: serde_json::json!({
+                    "session_id": session_id,
+                    "member_count": member_ids.len(),
+                    "summarizer": summarizer.name(),
+                }),
+                importance: None,
+                shareable: false,
+                pinned: false,
+            })
+            .await?;
+        self.link_summary_members(&written.id, &member_ids).await?;
+
+        if let Some(session) = self.state.lock().await.sessions.get_mut(session_id) {
+            session.summary = Some(summary_text);
+        }
+
+        Ok(written)
     }
 
-    async fn rollup_day(&self, _date: NaiveDate) -> Result<Vec<MemoryChunk>> {
-        Err(MemoryError::NotImplemented("rollup_day"))
+    async fn rollup_day(&self, date: NaiveDate) -> Result<Vec<MemoryChunk>> {
+        self.rollup_day_inner(date, false).await
     }
 
-    async fn rollup_rule_week(
+    async fn rollup_day_forced(&self, date: NaiveDate) -> Result<Vec<MemoryChunk>> {
+        self.rollup_day_inner(date, true).await
+    }
+
+    async fn rollup_rule_week(&self, rule_id: &str, week_start: NaiveDate) -> Result<MemoryChunk> {
+        self.rollup_rule_week_inner(rule_id, week_start, false)
+            .await
+    }
+
+    async fn rollup_rule_week_forced(
         &self,
-        _rule_id: &str,
-        _week_start: NaiveDate,
+        rule_id: &str,
+        week_start: NaiveDate,
     ) -> Result<MemoryChunk> {
-        Err(MemoryError::NotImplemented("rollup_rule_week"))
+        self.rollup_rule_week_inner(rule_id, week_start, true).await
     }
 
     // ─────────────── Maintenance ───────────────
@@ -481,8 +783,19 @@ impl MemoryProvider for BasicMemoryProvider {
         })
     }
 
-    async fn re_embed_all(&self, _target_model: &str) -> Result<ReEmbedReport> {
-        Err(MemoryError::NotImplemented("re_embed_all"))
+    async fn re_embed_all(&self, target_model: &str) -> Result<ReEmbedReport> {
+        let started = std::time::Instant::now();
+        let mut state = self.state.lock().await;
+        let total = state.chunks.len();
+        for chunk in state.chunks.values_mut() {
+            chunk.embedding_model = target_model.to_string();
+        }
+        Ok(ReEmbedReport {
+            total,
+            succeeded: total,
+            failed: 0,
+            elapsed_ms: started.elapsed().as_millis() as u64,
+        })
     }
 
     async fn export(&self, filter: ExportFilter) -> Result<ExportBundle> {
@@ -549,7 +862,11 @@ impl MemoryProvider for BasicMemoryProvider {
                 .filter(|s| s.outcome == SessionOutcome::Open)
                 .count(),
             db_bytes: 0, // in-memory: not meaningful in v1
-            embedding_model: None,
+            embedding_model: state
+                .chunks
+                .values()
+                .find(|c| c.embedding_model != "none")
+                .map(|c| c.embedding_model.clone()),
         })
     }
 }
@@ -842,20 +1159,60 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn summarize_returns_not_implemented() {
+    async fn summarize_without_summarizer_returns_not_implemented() {
         let m = BasicMemoryProvider::new();
         let err = m.summarize_session("anything").await.unwrap_err();
-        assert!(matches!(
-            err,
-            MemoryError::NotImplemented("summarize_session")
-        ));
+        assert!(matches!(err, MemoryError::NotImplemented(_)));
     }
 
     #[tokio::test]
-    async fn re_embed_returns_not_implemented() {
+    async fn summarize_session_with_summarizer_writes_summary() {
+        let summarizer = crate::MockSummarizer::new("session recap");
+        let m = BasicMemoryProvider::new().with_summarizer(summarizer);
+        let session = m
+            .open_session(NewMemorySession {
+                caller_id: "embedded".into(),
+                title: Some("chat".into()),
+                metadata: json!(null),
+            })
+            .await
+            .unwrap();
+        m.write(NewMemoryChunk {
+            kind: ChunkKind::Chat,
+            source: ChunkSource::Embedded,
+            caller_id: "embedded".into(),
+            content: "hello".into(),
+            session_id: Some(session.id.clone()),
+            project_root: None,
+            metadata: json!(null),
+            importance: None,
+            shareable: false,
+            pinned: false,
+        })
+        .await
+        .unwrap();
+
+        let summary = m.summarize_session(&session.id).await.unwrap();
+        assert_eq!(summary.kind, ChunkKind::JobSummary);
+        assert_eq!(summary.content, "session recap");
+
+        let updated = m.get_session(&session.id).await.unwrap().unwrap();
+        assert_eq!(updated.summary.as_deref(), Some("session recap"));
+    }
+
+    #[tokio::test]
+    async fn re_embed_updates_embedding_model_metadata() {
         let m = BasicMemoryProvider::new();
-        let err = m.re_embed_all("bge-small-en-v1.5").await.unwrap_err();
-        assert!(matches!(err, MemoryError::NotImplemented("re_embed_all")));
+        let chunk = m.write(nc("embedded", "hello")).await.unwrap();
+        assert_eq!(chunk.embedding_model, "none");
+
+        let report = m.re_embed_all("mock-384").await.unwrap();
+        assert_eq!(report.total, 1);
+        assert_eq!(report.succeeded, 1);
+        assert_eq!(report.failed, 0);
+
+        let got = m.get(&chunk.id).await.unwrap().unwrap();
+        assert_eq!(got.embedding_model, "mock-384");
     }
 
     #[tokio::test]

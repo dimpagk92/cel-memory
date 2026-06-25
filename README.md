@@ -16,9 +16,11 @@ implementation.
 
 Use `cel-memory` when agent code needs durable, scoped retrieval but should not
 depend on a storage engine. Callers depend on `MemoryProvider`; backends decide
-how chunks are stored, embedded, indexed, summarized, and aged.
+how chunks are stored, embedded, indexed, summarized, and aged. Attach a
+[`Summarizer`](https://docs.rs/cel-memory/latest/cel_memory/trait.Summarizer.html)
+with [`BasicMemoryProvider::with_summarizer`] to enable session summaries and rollups.
 
-**Status:** v0.1.7 on [crates.io](https://crates.io/crates/cel-memory) — the `MemoryProvider` trait surface is stable. Two implementations ship against it: `BasicMemoryProvider` (in-crate, in-memory reference) and [`cel-memory-sqlite`](https://crates.io/crates/cel-memory-sqlite) (SQLite + vector + FTS, hybrid retrieval).
+**Status:** v0.1.8 on [crates.io](https://crates.io/crates/cel-memory) — the `MemoryProvider` trait surface is stable. Two implementations ship against it: `BasicMemoryProvider` (in-crate, in-memory reference) and [`cel-memory-sqlite`](https://crates.io/crates/cel-memory-sqlite) (SQLite + vector + FTS, hybrid retrieval).
 
 ## What's Included
 

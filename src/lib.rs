@@ -12,10 +12,9 @@
 //!
 //! [`BasicMemoryProvider`] is the in-crate reference implementation — real
 //! bodies for [`MemoryProvider::retrieve`], [`MemoryProvider::write`], session
-//! lifecycle, simple deletes, export, and stats; `Err(NotImplemented)` for
-//! summarization, rollups, and re-embed; no-ops for `update_importance` and
-//! `supersede`. A full storage backend (e.g. the `cel-memory-sqlite` crate)
-//! drops in behind the same trait without caller churn.
+//! lifecycle, export, stats, summarization, rollups, and re-embed metadata
+//! updates when a [`Summarizer`] is attached; no-ops for
+//! [`MemoryProvider::update_importance`] and [`MemoryProvider::supersede`].
 
 #![deny(missing_docs)]
 #![warn(rust_2018_idioms)]

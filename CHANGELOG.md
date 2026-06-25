@@ -10,6 +10,12 @@ line at `0.1.5`.
 
 ## [Unreleased]
 
+## [0.1.8] — 2026-06-25
+
+### Added
+- `BasicMemoryProvider::with_summarizer` and in-memory implementations of
+  `summarize_session`, `rollup_day`, `rollup_rule_week`, and `re_embed_all`.
+
 ## [0.1.7] — 2026-06-25
 
 ### Changed
