@@ -1,5 +1,9 @@
 # cel-memory
 
+[![crates.io](https://img.shields.io/crates/v/cel-memory.svg)](https://crates.io/crates/cel-memory)
+[![docs.rs](https://docs.rs/cel-memory/badge.svg)](https://docs.rs/cel-memory)
+[![CI](https://github.com/dimpagk92/cel-memory/actions/workflows/ci.yml/badge.svg)](https://github.com/dimpagk92/cel-memory/actions/workflows/ci.yml)
+
 Backend-agnostic memory traits and value types for AI agents.
 
 `cel-memory` is the contract between an agent and an arbitrary persistence
@@ -14,7 +18,7 @@ Use `cel-memory` when agent code needs durable, scoped retrieval but should not
 depend on a storage engine. Callers depend on `MemoryProvider`; backends decide
 how chunks are stored, embedded, indexed, summarized, and aged.
 
-**Status:** v0.1 — the `MemoryProvider` trait surface is stable. Two implementations ship against it: `BasicMemoryProvider` (in-crate, in-memory reference) and [`cel-memory-sqlite`](https://crates.io/crates/cel-memory-sqlite) (SQLite + vector + FTS, hybrid retrieval).
+**Status:** v0.1.6 on [crates.io](https://crates.io/crates/cel-memory) — the `MemoryProvider` trait surface is stable. Two implementations ship against it: `BasicMemoryProvider` (in-crate, in-memory reference) and [`cel-memory-sqlite`](https://crates.io/crates/cel-memory-sqlite) (SQLite + vector + FTS, hybrid retrieval).
 
 ## What's Included
 
@@ -70,10 +74,10 @@ let hits = memory.retrieve(MemoryQuery {
 Runnable examples:
 
 ```sh
-cargo run -p cel-memory --example basic
-cargo run -p cel-memory --example backend_swap
-cargo run -p cel-memory --example write_hook
-cargo run -p cel-memory --example custom_provider
+cargo run --example basic
+cargo run --example backend_swap
+cargo run --example write_hook
+cargo run --example custom_provider
 ```
 
 - `basic` uses the in-memory reference provider end to end.
