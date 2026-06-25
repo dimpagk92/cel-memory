@@ -10,6 +10,10 @@ line at `0.1.5`.
 
 ## [Unreleased]
 
+### Added
+- [`BACKENDS.md`](BACKENDS.md) — community guide for implementing alternate
+  `MemoryProvider` storage engines in separate crates.
+
 ## [0.1.8] — 2026-06-25
 
 ### Added

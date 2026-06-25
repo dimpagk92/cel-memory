@@ -4,8 +4,10 @@
 //! depends on. Agents, CLIs, servers, desktop apps, and evaluation harnesses can
 //! compile against this trait while swapping persistence backends underneath.
 //! [`crate::BasicMemoryProvider`] is the in-crate reference backend; a full
-//! storage backend (e.g. the `cel-memory-sqlite` crate) drops in behind the same
-//! surface without caller churn.
+//! storage backend (e.g. the [`cel-memory-sqlite`](https://crates.io/crates/cel-memory-sqlite) crate)
+//! drops in behind the same surface without caller churn. Other engines belong
+//! in separate crates — see
+//! [BACKENDS.md](https://github.com/dimpagk92/cel-memory/blob/main/BACKENDS.md).
 
 use async_trait::async_trait;
 use chrono::NaiveDate;

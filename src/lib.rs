@@ -15,6 +15,9 @@
 //! lifecycle, export, stats, summarization, rollups, and re-embed metadata
 //! updates when a [`Summarizer`] is attached; no-ops for
 //! [`MemoryProvider::update_importance`] and [`MemoryProvider::supersede`].
+//! A full storage backend (e.g. [`cel-memory-sqlite`](https://crates.io/crates/cel-memory-sqlite))
+//! implements the same trait in a separate crate — see
+//! [BACKENDS.md](https://github.com/dimpagk92/cel-memory/blob/main/BACKENDS.md).
 
 #![deny(missing_docs)]
 #![warn(rust_2018_idioms)]

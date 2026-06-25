@@ -87,6 +87,22 @@ cargo run --example custom_provider
 - `write_hook` shows policy/redaction before persistence.
 - `custom_provider` shows a provider wrapper that implements the trait.
 
+## Implementing another backend
+
+Storage engines (PostgreSQL, DuckDB, Redis, hosted vector DBs, etc.) belong in
+**separate crates** that implement [`MemoryProvider`](https://docs.rs/cel-memory/latest/cel_memory/trait.MemoryProvider.html).
+Do not add drivers or SQL to this repo.
+
+See **[BACKENDS.md](BACKENDS.md)** for a phased implementation guide, schema
+mapping from `cel-memory-sqlite`, retrieval expectations, and conformance
+testing. Published community backends can be listed there and in the table below.
+
+| Backend | Crate | Status |
+|---------|-------|--------|
+| In-memory (reference) | `cel-memory` (`BasicMemoryProvider`) | maintained here |
+| SQLite + vector + FTS | [`cel-memory-sqlite`](https://crates.io/crates/cel-memory-sqlite) | maintained |
+| *your engine* | *your crate* | community |
+
 ## Comparable libraries
 
 | | cel-memory | Hindsight | Mem0 | Letta |
