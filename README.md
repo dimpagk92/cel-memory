@@ -5,7 +5,7 @@ Backend-agnostic memory traits and value types for AI agents.
 `cel-memory` is the contract between an agent and an arbitrary persistence
 layer. The trait is small enough to drop in your own backend (file, SQLite,
 Redis, Mem0, Hindsight, etc.) without changing agent code. The companion
-[`cel-memory-sqlite`](../cel-memory-sqlite) crate provides a local SQLite
+[`cel-memory-sqlite`](https://crates.io/crates/cel-memory-sqlite) crate provides a local SQLite
 implementation.
 
 ## Purpose
@@ -14,7 +14,7 @@ Use `cel-memory` when agent code needs durable, scoped retrieval but should not
 depend on a storage engine. Callers depend on `MemoryProvider`; backends decide
 how chunks are stored, embedded, indexed, summarized, and aged.
 
-**Status:** v0.1 — the `MemoryProvider` trait surface is stable. Two implementations ship against it: `BasicMemoryProvider` (in-crate, in-memory reference) and [`cel-memory-sqlite`](../cel-memory-sqlite) (SQLite + vector + FTS, hybrid retrieval).
+**Status:** v0.1 — the `MemoryProvider` trait surface is stable. Two implementations ship against it: `BasicMemoryProvider` (in-crate, in-memory reference) and [`cel-memory-sqlite`](https://crates.io/crates/cel-memory-sqlite) (SQLite + vector + FTS, hybrid retrieval).
 
 ## What's Included
 
@@ -26,7 +26,7 @@ how chunks are stored, embedded, indexed, summarized, and aged.
 
 ## Out Of Scope
 
-- Storage. See [`cel-memory-sqlite`](../cel-memory-sqlite) for SQLite + vector retrieval.
+- Storage. See [`cel-memory-sqlite`](https://crates.io/crates/cel-memory-sqlite) for SQLite + vector retrieval.
 - Embedding models. The trait makes no assumption about whether/how content is embedded — that's a backend concern.
 - LLM-call retrieval logic. See `cel-brief` for "retrieve memory + assemble into an LLM prompt."
 

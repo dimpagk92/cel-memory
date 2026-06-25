@@ -1,9 +1,9 @@
 [package]
 name = "cel-memory"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-repository.workspace = true
+version = "0.1.6"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/dimpagk92/cel-memory"
 description = "Backend-agnostic memory traits and value types for AI agents, with scoped retrieval, sessions, and governance hooks."
 keywords = ["ai", "memory", "agent", "context", "llm"]
 categories = ["asynchronous", "data-structures"]
@@ -11,12 +11,12 @@ readme = "README.md"
 
 [dependencies]
 async-trait = "0.1"
-chrono = { workspace = true, features = ["serde"] }
-serde = { workspace = true, features = ["derive"] }
-serde_json.workspace = true
-thiserror.workspace = true
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
 tokio = { version = "1", features = ["sync"] }
-uuid = { workspace = true, features = ["v7", "serde"] }
+uuid = { version = "1", features = ["v7", "serde"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
