@@ -164,7 +164,8 @@ impl BasicMemoryProvider {
         let date_s = date.to_string();
         let state = self.state.lock().await;
         Ok(state.chunks.values().any(|c| {
-            c.kind == ChunkKind::Rollup && Self::metadata_str(c, "rollup_date") == Some(date_s.clone())
+            c.kind == ChunkKind::Rollup
+                && Self::metadata_str(c, "rollup_date") == Some(date_s.clone())
         }))
     }
 

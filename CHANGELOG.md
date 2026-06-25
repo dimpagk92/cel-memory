@@ -10,9 +10,11 @@ line at `0.1.5`.
 
 ## [Unreleased]
 
+## [0.1.9] — 2026-06-25
+
 ### Added
-- [`BACKENDS.md`](BACKENDS.md) — community guide for implementing alternate
-  `MemoryProvider` storage engines in separate crates.
+- [`BACKENDS.md`](BACKENDS.md) on crates.io — community guide for custom
+  `MemoryProvider` storage engines (PostgreSQL, DuckDB, etc.) in separate crates.
 
 ## [0.1.8] — 2026-06-25
 
