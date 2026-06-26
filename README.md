@@ -103,6 +103,12 @@ testing. Published community backends can be listed there and in the table below
 | SQLite + vector + FTS | [`cel-memory-sqlite`](https://crates.io/crates/cel-memory-sqlite) | maintained |
 | *your engine* | *your crate* | community |
 
+## Upgrading from 0.1.x
+
+**0.2.0** moves [`Embedder`](https://docs.rs/cel-memory/latest/cel_memory/trait.Embedder.html)
+into this crate and removes the `ChunkSource::Cortex` alias. See the
+**[0.2 migration guide](https://github.com/dimpagk92/cellar/blob/sync/main-from-private-2026-06-10/docs/migration-0.2.md)**.
+
 ## Comparable libraries
 
 | | cel-memory | Hindsight | Mem0 | Letta |
