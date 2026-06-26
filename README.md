@@ -102,6 +102,7 @@ testing. Published community backends can be listed there and in the table below
 | In-memory (reference) | `cel-memory` (`BasicMemoryProvider`) | maintained here |
 | SQLite + vector + FTS | [`cel-memory-sqlite`](https://crates.io/crates/cel-memory-sqlite) | maintained |
 | PostgreSQL + pgvector | [`cel-memory-postgres`](https://crates.io/crates/cel-memory-postgres) | starter (Phase 0–1) |
+| DuckDB embedded | [`cel-memory-duckdb`](https://crates.io/crates/cel-memory-duckdb) | starter (Phase 0–1) |
 | *your engine* | *your crate* | community |
 
 ## Upgrading from 0.1.x
