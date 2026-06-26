@@ -10,6 +10,17 @@ line at `0.1.5`.
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-06-25
+
+### Added
+- [`assert_retrieve_finds_written`], [`assert_session_lifecycle`], and
+  [`assert_summarize_session_roundtrip`] conformance helpers for backend
+  integration tests.
+
+[`assert_retrieve_finds_written`]: https://docs.rs/cel-memory/latest/cel_memory/fn.assert_retrieve_finds_written.html
+[`assert_session_lifecycle`]: https://docs.rs/cel-memory/latest/cel_memory/fn.assert_session_lifecycle.html
+[`assert_summarize_session_roundtrip`]: https://docs.rs/cel-memory/latest/cel_memory/fn.assert_summarize_session_roundtrip.html
+
 ## [0.2.0] — 2026-06-25
 
 ### Added

@@ -39,7 +39,10 @@ pub mod write_hook;
 // Convenient re-exports — the symbols every caller will name.
 pub use basic::BasicMemoryProvider;
 pub use chunk::{ChunkKind, ChunkSource, MemoryChunk, MemoryTier, NewMemoryChunk};
-pub use conformance::assert_write_get_stats;
+pub use conformance::{
+    assert_retrieve_finds_written, assert_session_lifecycle, assert_summarize_session_roundtrip,
+    assert_write_get_stats,
+};
 pub use embedder::{Embedder, EmbedderError, EmbedderResult, MockEmbedder};
 pub use error::{MemoryError, Result};
 pub use importance::score as score_importance;
